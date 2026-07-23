@@ -128,6 +128,29 @@ async def run_tests():
         assert "рекомендация" in answer.lower()
         print("ask_ai: получен корректный ответ ✅ ->", answer)
 
+    print("\n== 5. Проверка сравнения периодов (pct_change / format_comparison) ==")
+    assert bot_main.pct_change(100, 150) == 50.0
+    assert bot_main.pct_change(100, 50) == -50.0
+    assert bot_main.pct_change(0, 50) is None
+    comparison = bot_main.format_comparison(
+        {"impressions": 1500, "income": 15.0, "cpm": 10.0},
+        {"impressions": 1000, "income": 10.0, "cpm": 10.0},
+        "вчера",
+    )
+    assert "vs вчера" in comparison and "+50" in comparison
+    assert bot_main.format_comparison({"impressions": 1, "income": 1, "cpm": 1}, None, "вчера") == ""
+    print("pct_change/format_comparison работают корректно ✅ ->", comparison.strip())
+
+    print("\n== 6. Проверка автоматического ежедневного AI-обзора ==")
+    with patch("ai_advisor.aiohttp.ClientSession", return_value=FakeSession()), \
+         patch("ai_advisor.GEMINI_API_KEY", "fake-key"), \
+         patch.object(bot_main.bot, "send_message", new=AsyncMock()) as mock_overview_msg:
+        await bot_main.send_daily_ai_overview()
+        assert mock_overview_msg.await_count == 1
+        overview_text = mock_overview_msg.call_args[0][1]
+        assert "Ежедневный AI-обзор" in overview_text
+        print("send_daily_ai_overview: сообщение отправлено ✅")
+
     print("\nВСЕ ПРОВЕРКИ ПРОШЛИ ✅")
 
 

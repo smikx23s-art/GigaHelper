@@ -67,6 +67,26 @@ def _get_history_sync(days: int):
     ]
 
 
+def _get_day_sync(d: str):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.execute(
+        "SELECT date, impressions, clicks, income, cpm, ctr FROM daily_stats WHERE date = ?",
+        (d,),
+    )
+    row = cur.fetchone()
+    conn.close()
+    if not row:
+        return None
+    return {
+        "date": row[0],
+        "impressions": row[1],
+        "clicks": row[2],
+        "income": row[3],
+        "cpm": row[4],
+        "ctr": row[5],
+    }
+
+
 _init_db()
 
 
@@ -76,3 +96,8 @@ async def save_daily_stats(d: date, totals: dict):
 
 async def get_history(days: int = 90):
     return await asyncio.to_thread(_get_history_sync, days)
+
+
+async def get_day(d: date):
+    """Возвращает сохранённую статистику за конкретный день или None, если её нет."""
+    return await asyncio.to_thread(_get_day_sync, d.isoformat())

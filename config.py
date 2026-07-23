@@ -17,3 +17,7 @@ CTR_ALERT_THRESHOLD = float(os.getenv("CTR_ALERT_THRESHOLD", "20"))
 # AI-советник (Google Gemini — бесплатный API-ключ на aistudio.google.com/apikey)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash")
+
+# Час (0-23, таймзона Europe/Moscow), в который бот сам присылает ежедневный
+# AI-обзор статистики без запроса /ask
+AI_OVERVIEW_HOUR = int(os.getenv("AI_OVERVIEW_HOUR", "9"))

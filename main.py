@@ -7,7 +7,9 @@ from aiogram.filters import Command, CommandObject
 from aiogram.types import Message, BufferedInputFile
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
-from config import BOT_TOKEN, CHAT_ID, CPM_ALERT_THRESHOLD, CTR_ALERT_THRESHOLD
+from config import (
+    BOT_TOKEN, CHAT_ID, CPM_ALERT_THRESHOLD, CTR_ALERT_THRESHOLD, AI_OVERVIEW_HOUR,
+)
 from gigapub import get_stats
 from charts import geo_cpm_chart, weekly_trend_chart
 import storage
@@ -91,6 +93,32 @@ def totals(rows: list) -> dict:
     }
 
 
+def pct_change(old: float, new: float):
+    """Возвращает % изменения new относительно old, или None, если сравнить не с чем."""
+    if not old:
+        return None
+    return (new - old) / old * 100
+
+
+def format_comparison(current: dict, previous: dict, label: str) -> str:
+    """Строит короткий блок сравнения показателей с предыдущим периодом."""
+    if not previous:
+        return ""
+
+    def fmt(field: str, is_money: bool = False) -> str:
+        change = pct_change(previous[field], current[field])
+        if change is None:
+            return "н/д"
+        arrow = "📈" if change >= 0 else "📉"
+        sign = "+" if change >= 0 else ""
+        return f"{arrow} {sign}{change:.1f}%"
+
+    return (
+        f"\n<b>vs {label}:</b> "
+        f"показы {fmt('impressions')}, доход {fmt('income')}, CPM {fmt('cpm')}"
+    )
+
+
 async def check_cpm_anomaly():
     """Сравнивает сегодняшние CTR/CPM со вчерашними и шлёт предупреждение при просадке.
 
@@ -160,6 +188,10 @@ async def send_hourly_stats():
     text = format_geo_report(rows)
 
     if rows:
+        today_totals = totals(rows)
+        yesterday_totals = await storage.get_day(today - timedelta(days=1))
+        text += format_comparison(today_totals, yesterday_totals, "вчера")
+
         visible_rows = [
             r for r in rows
             if r.get("impressions", 0) or r.get("clicks", 0) or r.get("income", 0)
@@ -168,7 +200,7 @@ async def send_hourly_stats():
         await send_photo_and_report(
             chart.read(), "geo_cpm.png", "📊 Статистика за сегодня", text
         )
-        await storage.save_daily_stats(today, totals(rows))
+        await storage.save_daily_stats(today, today_totals)
     else:
         await bot.send_message(CHAT_ID, text, parse_mode="HTML")
 
@@ -188,6 +220,20 @@ async def send_weekly_stats():
     text = format_weekly_report(rows)
 
     if rows:
+        current_totals = totals(rows)
+        prev_end = start - timedelta(days=1)
+        prev_start = prev_end - timedelta(days=6)
+
+        prev_totals = None
+        try:
+            prev_rows = await get_stats(prev_start, prev_end, group_by="date")
+            if prev_rows:
+                prev_totals = totals(prev_rows)
+        except Exception:
+            logging.exception("Не удалось получить статистику за предыдущую неделю для сравнения")
+
+        text += format_comparison(current_totals, prev_totals, "прошлую неделю")
+
         chart = weekly_trend_chart(rows)
         await send_photo_and_report(
             chart.read(), "weekly_trend.png", "📅 Статистика за неделю", text
@@ -210,8 +256,9 @@ async def cmd_start(message: Message):
     await message.answer(
         "👋 Бот статистики GigaPub запущен.\n\n"
         "Что делает автоматически:\n"
-        "• Каждый час — статистика по гео за сегодня + график CPM\n"
-        "• В 00:00 — сводка за неделю + график тренда\n"
+        "• Каждый час — статистика по гео за сегодня + график CPM + сравнение с вчера\n"
+        "• В 00:00 — сводка за неделю + график тренда + сравнение с прошлой неделей\n"
+        "• В 09:00 — короткий AI-обзор последних дней без запроса\n"
         "• Алерт, если CTR резко растёт, а CPM резко падает\n\n"
         "Команды:\n"
         "/stats — статистика за сегодня прямо сейчас\n"
@@ -252,10 +299,30 @@ async def cmd_weekly(message: Message):
     await send_weekly_stats()
 
 
+DAILY_OVERVIEW_QUESTION = (
+    "Дай короткий ежедневный обзор (3-5 пунктов) по вчерашней и последним дням "
+    "статистики: как дела с доходом/CPM/CTR, есть ли тренды, аномалии или страны, "
+    "требующие внимания."
+)
+
+
+async def send_daily_ai_overview():
+    history_rows = await storage.get_history(days=30)
+    if not history_rows:
+        return  # ещё нет данных для осмысленного обзора
+
+    answer = await ask_ai(DAILY_OVERVIEW_QUESTION, history_rows)
+    text = f"🤖 <b>Ежедневный AI-обзор</b>\n\n{answer}"
+
+    for i in range(0, len(text), 4000):
+        await bot.send_message(CHAT_ID, text[i:i + 4000], parse_mode="HTML")
+
+
 async def main():
     scheduler = AsyncIOScheduler(timezone="Europe/Moscow")
     scheduler.add_job(send_hourly_stats, "cron", minute=0)
     scheduler.add_job(send_weekly_stats, "cron", hour=0, minute=0)
+    scheduler.add_job(send_daily_ai_overview, "cron", hour=AI_OVERVIEW_HOUR, minute=0)
     scheduler.start()
 
     await dp.start_polling(bot)
