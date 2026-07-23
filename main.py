@@ -66,8 +66,8 @@ def format_weekly_report(rows: list) -> str:
     avg_ctr = (total_clicks / total_impr * 100) if total_impr else 0
 
     lines = ["📅 <b>Статистика за неделю</b>", ""]
-    for r in sorted(rows, key=lambda x: x.get("date") or x.get("day") or ""):
-        day_label = r.get("date") or r.get("day") or "?"
+    for r in sorted(rows, key=lambda x: extract_date_field(x) or ""):
+        day_label = extract_date_field(r) or "?"
         lines.append(
             f"🗓 {day_label}: показы {r.get('impressions', 0)}, клики {r.get('clicks', 0)}, "
             f"доход ${r.get('income', 0):.2f}, CPM ${r.get('cpm', 0):.2f}"
@@ -79,6 +79,19 @@ def format_weekly_report(rows: list) -> str:
         f"доход ${total_income:.2f}, средний CPM ${avg_cpm:.2f}, CTR {avg_ctr:.2f}%",
     ]
     return "\n".join(lines)
+
+
+def extract_date_field(row: dict):
+    """Достаёт значение даты из строки статистики, даже если поле называется
+    не 'date'/'day', а как-то иначе (например, 'reportDate'). Возвращает None,
+    если подходящего поля не нашлось вообще."""
+    for key in ("date", "day"):
+        if row.get(key):
+            return row[key]
+    for key, value in row.items():
+        if "date" in key.lower() and value:
+            return value
+    return None
 
 
 def totals(rows: list) -> dict:
@@ -218,6 +231,9 @@ async def send_weekly_stats():
         await bot.send_message(CHAT_ID, f"⚠️ Не удалось получить недельную статистику: {e}")
         return
 
+    if rows:
+        logging.info("GigaPub weekly row sample (raw keys): %r", rows[0])
+
     text = format_weekly_report(rows)
 
     if rows:
@@ -240,7 +256,7 @@ async def send_weekly_stats():
             chart.read(), "weekly_trend.png", "📅 Статистика за неделю", text
         )
         for r in rows:
-            raw_date = r.get("date") or r.get("day")
+            raw_date = extract_date_field(r)
             if not raw_date:
                 logging.warning("Строка недельной статистики без поля date, пропускаю: %r", r)
                 continue

@@ -4,6 +4,19 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
+def _extract_date_field(row: dict):
+    """Достаёт значение даты из строки статистики, даже если поле называется
+    не 'date'/'day' (дублирует логику main.extract_date_field, чтобы избежать
+    циклического импорта между charts.py и main.py)."""
+    for key in ("date", "day"):
+        if row.get(key):
+            return row[key]
+    for key, value in row.items():
+        if "date" in key.lower() and value:
+            return value
+    return None
+
+
 def geo_cpm_chart(rows: list) -> io.BytesIO:
     """Столбчатый график CPM по гео за текущий день."""
     rows = sorted(rows, key=lambda r: r.get("cpm", 0), reverse=True)
@@ -27,8 +40,8 @@ def geo_cpm_chart(rows: list) -> io.BytesIO:
 
 def weekly_trend_chart(rows: list) -> io.BytesIO:
     """Линейный график дохода/CPM по дням за неделю."""
-    rows = sorted(rows, key=lambda r: r.get("date") or r.get("day") or "")
-    dates = [r.get("date") or r.get("day") or "?" for r in rows]
+    rows = sorted(rows, key=lambda r: _extract_date_field(r) or "")
+    dates = [_extract_date_field(r) or "?" for r in rows]
     income = [r.get("income", 0) for r in rows]
     cpm = [r.get("cpm", 0) for r in rows]
 
