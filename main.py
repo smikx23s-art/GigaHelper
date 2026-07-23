@@ -32,8 +32,13 @@ def format_geo_report(rows: list) -> str:
     total_income = sum(r.get("income", 0) for r in rows)
     avg_cpm = (total_income / total_impr * 1000) if total_impr else 0
 
+    visible_rows = [
+        r for r in rows
+        if r.get("impressions", 0) or r.get("clicks", 0) or r.get("income", 0)
+    ]
+
     lines = [f"📊 <b>Статистика за сегодня ({date.today().isoformat()})</b>", ""]
-    for r in sorted(rows, key=lambda x: x.get("income", 0), reverse=True):
+    for r in sorted(visible_rows, key=lambda x: x.get("income", 0), reverse=True):
         code = r.get("countryCode", r.get("country_code", "?")).upper()
         lines.append(
             f"🌍 {code}: показы {r.get('impressions', 0)}, клики {r.get('clicks', 0)}, "
@@ -155,7 +160,11 @@ async def send_hourly_stats():
     text = format_geo_report(rows)
 
     if rows:
-        chart = geo_cpm_chart(rows)
+        visible_rows = [
+            r for r in rows
+            if r.get("impressions", 0) or r.get("clicks", 0) or r.get("income", 0)
+        ]
+        chart = geo_cpm_chart(visible_rows or rows)
         await send_photo_and_report(
             chart.read(), "geo_cpm.png", "📊 Статистика за сегодня", text
         )
