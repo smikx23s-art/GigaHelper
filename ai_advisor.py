@@ -34,7 +34,10 @@ def _format_history(history_rows: list) -> str:
     return "\n".join(lines)
 
 
-async def ask_ai(question: str, history_rows: list) -> str:
+async def ask_ai(question: str, history_rows: list, on_retry=None) -> str:
+    """on_retry(attempt, max_retries) — опциональный async callback,
+    вызывается перед каждым повтором, чтобы можно было сообщить пользователю,
+    что бот всё ещё пытается, а не завис."""
     if not GEMINI_API_KEY:
         return (
             "⚠️ GEMINI_API_KEY не задан в .env — AI-советник недоступен.\n"
@@ -69,6 +72,11 @@ async def ask_ai(question: str, history_rows: list) -> str:
 
                 if resp.status in RETRYABLE_STATUSES and attempt < MAX_RETRIES:
                     last_err = data.get("error", {}).get("message", str(data))
+                    if on_retry:
+                        try:
+                            await on_retry(attempt + 1, MAX_RETRIES)
+                        except Exception:
+                            pass
                     await asyncio.sleep(RETRY_DELAY_SECONDS * (attempt + 1))
                     continue
 

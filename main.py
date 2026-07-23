@@ -306,7 +306,13 @@ async def cmd_ask(message: Message, command: CommandObject):
 
     await message.answer("🤔 Анализирую историю статистики...")
     history_rows = await storage.get_history(days=90)
-    answer = await ask_ai(question, history_rows)
+
+    async def notify_retry(attempt: int, max_retries: int):
+        await message.answer(
+            f"⏳ Gemini перегружен, пробую ещё раз ({attempt}/{max_retries})..."
+        )
+
+    answer = await ask_ai(question, history_rows, on_retry=notify_retry)
 
     for i in range(0, len(answer), 4000):
         await message.answer(answer[i:i + 4000])
