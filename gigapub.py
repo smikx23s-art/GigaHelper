@@ -27,7 +27,8 @@ async def get_stats(start_date: date, end_date: date, group_by: str = "country_c
         "filters": filters,
     }
 
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=15)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(BASE_URL, json=payload, headers=headers) as resp:
             resp.raise_for_status()
             data = await resp.json()

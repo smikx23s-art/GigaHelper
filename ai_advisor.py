@@ -54,7 +54,8 @@ async def ask_ai(question: str, history_rows: list) -> str:
         "contents": [{"role": "user", "parts": [{"text": user_content}]}],
     }
 
-    async with aiohttp.ClientSession() as session:
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
         async with session.post(url, json=payload, headers=headers) as resp:
             data = await resp.json()
             if resp.status != 200:
