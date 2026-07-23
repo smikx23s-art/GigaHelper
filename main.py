@@ -66,9 +66,10 @@ def format_weekly_report(rows: list) -> str:
     avg_ctr = (total_clicks / total_impr * 100) if total_impr else 0
 
     lines = ["📅 <b>Статистика за неделю</b>", ""]
-    for r in sorted(rows, key=lambda x: x.get("date", "")):
+    for r in sorted(rows, key=lambda x: x.get("date") or x.get("day") or ""):
+        day_label = r.get("date") or r.get("day") or "?"
         lines.append(
-            f"🗓 {r.get('date')}: показы {r.get('impressions', 0)}, клики {r.get('clicks', 0)}, "
+            f"🗓 {day_label}: показы {r.get('impressions', 0)}, клики {r.get('clicks', 0)}, "
             f"доход ${r.get('income', 0):.2f}, CPM ${r.get('cpm', 0):.2f}"
         )
 
@@ -239,6 +240,11 @@ async def send_weekly_stats():
             chart.read(), "weekly_trend.png", "📅 Статистика за неделю", text
         )
         for r in rows:
+            raw_date = r.get("date") or r.get("day")
+            if not raw_date:
+                logging.warning("Строка недельной статистики без поля date, пропускаю: %r", r)
+                continue
+
             day_totals = {
                 "impressions": r.get("impressions", 0),
                 "clicks": r.get("clicks", 0),
@@ -246,7 +252,10 @@ async def send_weekly_stats():
                 "cpm": r.get("cpm", 0),
                 "ctr": (r.get("clicks", 0) / r["impressions"] * 100) if r.get("impressions") else 0,
             }
-            await storage.save_daily_stats(date.fromisoformat(r["date"]), day_totals)
+            try:
+                await storage.save_daily_stats(date.fromisoformat(raw_date), day_totals)
+            except ValueError:
+                logging.warning("Не удалось распознать дату %r в недельной статистике", raw_date)
     else:
         await bot.send_message(CHAT_ID, text, parse_mode="HTML")
 

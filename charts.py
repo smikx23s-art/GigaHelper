@@ -27,8 +27,8 @@ def geo_cpm_chart(rows: list) -> io.BytesIO:
 
 def weekly_trend_chart(rows: list) -> io.BytesIO:
     """Линейный график дохода/CPM по дням за неделю."""
-    rows = sorted(rows, key=lambda r: r.get("date", ""))
-    dates = [r.get("date", "") for r in rows]
+    rows = sorted(rows, key=lambda r: r.get("date") or r.get("day") or "")
+    dates = [r.get("date") or r.get("day") or "?" for r in rows]
     income = [r.get("income", 0) for r in rows]
     cpm = [r.get("cpm", 0) for r in rows]
 
