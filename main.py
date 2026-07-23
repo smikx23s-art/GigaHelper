@@ -127,6 +127,22 @@ async def check_cpm_anomaly():
         await bot.send_message(CHAT_ID, text, parse_mode="HTML")
 
 
+TELEGRAM_CAPTION_LIMIT = 1024
+TELEGRAM_MESSAGE_LIMIT = 4096
+
+
+async def send_photo_and_report(photo_bytes, filename: str, title: str, full_text: str):
+    """Шлёт фото с коротким заголовком в caption, а полный отчёт — отдельным
+    сообщением (или несколькими, если превышает лимит Telegram на 4096 символов).
+    Так мы не упираемся в лимит caption (1024 символа), сколько бы гео/дней ни было.
+    """
+    photo = BufferedInputFile(photo_bytes, filename=filename)
+    await bot.send_photo(CHAT_ID, photo=photo, caption=title, parse_mode="HTML")
+
+    for i in range(0, len(full_text), TELEGRAM_MESSAGE_LIMIT):
+        await bot.send_message(CHAT_ID, full_text[i:i + TELEGRAM_MESSAGE_LIMIT], parse_mode="HTML")
+
+
 async def send_hourly_stats():
     today = date.today()
     try:
@@ -140,8 +156,9 @@ async def send_hourly_stats():
 
     if rows:
         chart = geo_cpm_chart(rows)
-        photo = BufferedInputFile(chart.read(), filename="geo_cpm.png")
-        await bot.send_photo(CHAT_ID, photo=photo, caption=text, parse_mode="HTML")
+        await send_photo_and_report(
+            chart.read(), "geo_cpm.png", "📊 Статистика за сегодня", text
+        )
         await storage.save_daily_stats(today, totals(rows))
     else:
         await bot.send_message(CHAT_ID, text, parse_mode="HTML")
@@ -163,8 +180,9 @@ async def send_weekly_stats():
 
     if rows:
         chart = weekly_trend_chart(rows)
-        photo = BufferedInputFile(chart.read(), filename="weekly_trend.png")
-        await bot.send_photo(CHAT_ID, photo=photo, caption=text, parse_mode="HTML")
+        await send_photo_and_report(
+            chart.read(), "weekly_trend.png", "📅 Статистика за неделю", text
+        )
         for r in rows:
             day_totals = {
                 "impressions": r.get("impressions", 0),

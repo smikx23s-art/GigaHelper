@@ -69,11 +69,15 @@ async def run_tests():
         assert mock_send_photo.await_count == 1, "send_photo должен быть вызван 1 раз"
         print("send_hourly_stats: send_photo вызван ✅")
 
-        # анти-фрод алерт: CTR вырос с ~2.1% до ~6.9%, CPM упал с 12.9 до 8.7 -> должен сработать
-        assert mock_send_msg.await_count == 1, "должен сработать алерт аномалии"
-        alert_text = mock_send_msg.call_args[0][1]
+        # теперь полный текстовый отчёт шлётся отдельным send_message (caption только заголовок),
+        # плюс алерт аномалии -> итого 2 вызова send_message
+        assert mock_send_msg.await_count == 2, "ожидались текст отчёта + алерт аномалии"
+        report_text = mock_send_msg.call_args_list[0][0][1]
+        assert "Статистика за сегодня" in report_text
+        alert_text = mock_send_msg.call_args_list[1][0][1]
         assert "аномал" in alert_text.lower()
         print("check_cpm_anomaly: алерт сработал корректно ✅")
+        print("send_hourly_stats: полный отчёт отправлен отдельным сообщением (caption короткий) ✅")
 
     with patch("main.get_stats", side_effect=fake_get_stats), \
          patch.object(bot_main.bot, "send_message", new=AsyncMock()), \
