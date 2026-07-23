@@ -60,6 +60,12 @@ async def ask_ai(question: str, history_rows: list) -> str:
             data = await resp.json()
             if resp.status != 200:
                 err = data.get("error", {}).get("message", str(data))
+                if "no longer available" in err.lower() or resp.status == 404:
+                    return (
+                        f"⚠️ Модель Gemini недоступна: {err}\n"
+                        "Поменяй GEMINI_MODEL в переменных окружения на актуальную "
+                        "(например, gemini-3.5-flash) и перезапусти бота."
+                    )
                 return f"⚠️ Ошибка Gemini API: {err}"
 
             try:
